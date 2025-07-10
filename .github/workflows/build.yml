@@ -15,7 +15,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    # 使用 Java 21
+    # 清理可能存在的旧构建
+    - name: Clean workspace
+      run: |
+        ./gradlew clean || true
+        rm -rf build .gradle
+        
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
@@ -26,15 +31,54 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
+    # 显示环境信息
+    - name: Show environment
+      run: |
+        echo "Java Version:"
+        java -version
+        echo "Gradle Version:"
+        ./gradlew --version
+        echo "Project Structure:"
+        ls -la
+        echo "Gradle Dependencies:"
+        ./gradlew dependencies
+        
+    # 增强的构建步骤，输出详细日志到文件
     - name: Build with Gradle
-      run: ./gradlew build --stacktrace --info
+      run: |
+        # 同时输出到控制台和文件
+        ./gradlew build --stacktrace --info --scan | tee build.log
+        # 保存详细的构建日志
+        echo "BUILD_LOG=build.log" >> $GITHUB_ENV
       env:
         GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx2g
         
-    # 使用正确的 upload-artifact v4 语法
+    # 上传构建产物
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: BlockServerCMD
         path: build/libs/*.jar
         retention-days: 7
+        
+    # 始终上传构建日志（即使失败）
+    - name: Upload Build Log
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: build-log
+        path: ${{ env.BUILD_LOG }}
+        retention-days: 7
+        
+    # 构建失败时的诊断步骤
+    - name: Failure Diagnostics
+      if: failure()
+      run: |
+        echo "===== BUILD FAILURE DIAGNOSTICS ====="
+        echo "Java Home: $JAVA_HOME"
+        echo "Gradle Properties:"
+        cat gradle.properties || true
+        echo "Build Reports:"
+        ls -la build/reports || true
+        echo "Last 50 lines of build log:"
+        tail -n 50 build.log
