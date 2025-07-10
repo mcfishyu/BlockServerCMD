@@ -1,0 +1,3 @@
+#BlockServerCMD Configuration
+blocked-message=❌ 您不能使用 /server 命令切换服务器！
+allowed-servers=lobby

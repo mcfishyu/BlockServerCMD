@@ -1,0 +1,9 @@
+{
+  "id": "blockservercmd",
+  "name": "BlockServerCMD",
+  "version": "1.0.0",
+  "description": "阻止玩家使用 /server 命令切换服务器",
+  "authors": ["Yumi"],
+  "dependencies": [],
+  "main": "com.example.BlockServerCMD"
+}
