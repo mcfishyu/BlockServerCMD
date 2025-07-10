@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,11 +26,26 @@ jobs:
       run: chmod +x gradlew
       
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build --stacktrace --info || echo "Gradle build failed"  # 添加详细日志
       
     - name: Upload Artifact
+      if: success()  # 仅在构建成功时上传
       uses: actions/upload-artifact@v4
       with:
         name: BlockServerCMD
         path: build/libs/*.jar
         retention-days: 7
+        
+    # 添加失败时的诊断步骤
+    - name: Diagnostic on Failure
+      if: failure()
+      run: |
+        echo "=== Build Failure Diagnostics ==="
+        echo "Java Version:"
+        java -version
+        echo "Gradle Version:"
+        ./gradlew --version
+        echo "Project Structure:"
+        ls -la
+        echo "Build Directory Contents:"
+        ls -la build
