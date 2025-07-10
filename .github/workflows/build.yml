@@ -14,12 +14,19 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    # 清理可能存在的旧构建
-    - name: Clean workspace
+      with:
+        fetch-depth: 0  # 获取完整历史（可能影响 Gradle Wrapper）
+        
+    - name: Pre-Build Checks
       run: |
-        ./gradlew clean || true
-        rm -rf build .gradle
+        echo "===== Essential Files Check ====="
+        echo "Workspace: $(pwd)"
+        echo "--- Directory Listing ---"
+        ls -la
+        echo "--- Gradle Wrapper ---"
+        ls -l gradle* || echo "No gradle files found"
+        echo "--- Build Files ---"
+        ls -l build.gradle* settings.gradle* || echo "No build files found"
         
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -28,57 +35,48 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
         
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-      
-    # 显示环境信息
-    - name: Show environment
+    - name: Verify Gradle Wrapper
       run: |
-        echo "Java Version:"
-        java -version
-        echo "Gradle Version:"
-        ./gradlew --version
-        echo "Project Structure:"
-        ls -la
-        echo "Gradle Dependencies:"
-        ./gradlew dependencies
+        # 检查 gradlew 是否存在
+        if [ ! -f "gradlew" ]; then
+          echo "::error::gradlew file missing! Generating new wrapper..."
+          gradle wrapper --gradle-version 8.5
+        fi
         
-    # 增强的构建步骤，输出详细日志到文件
+        # 确保可执行
+        chmod +x gradlew
+        echo "Gradle Wrapper version:"
+        ./gradlew --version || echo "Gradle failed to run"
+        
     - name: Build with Gradle
       run: |
-        # 同时输出到控制台和文件
-        ./gradlew build --stacktrace --info --scan | tee build.log
-        # 保存详细的构建日志
+        # 创建日志文件确保存在
+        touch build.log
+        # 运行构建并捕获日志
+        ./gradlew build --stacktrace --info 2>&1 | tee build.log
         echo "BUILD_LOG=build.log" >> $GITHUB_ENV
-      env:
-        GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx2g
         
-    # 上传构建产物
     - name: Upload Artifact
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: BlockServerCMD
         path: build/libs/*.jar
         retention-days: 7
         
-    # 始终上传构建日志（即使失败）
     - name: Upload Build Log
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: build-log
         path: ${{ env.BUILD_LOG }}
-        retention-days: 7
         
-    # 构建失败时的诊断步骤
     - name: Failure Diagnostics
       if: failure()
       run: |
-        echo "===== BUILD FAILURE DIAGNOSTICS ====="
-        echo "Java Home: $JAVA_HOME"
-        echo "Gradle Properties:"
-        cat gradle.properties || true
-        echo "Build Reports:"
-        ls -la build/reports || true
-        echo "Last 50 lines of build log:"
-        tail -n 50 build.log
+        echo "===== FINAL DIAGNOSTICS ====="
+        echo "Java: $(java -version 2>&1)"
+        echo "Gradle:"
+        ./gradlew --version || true
+        echo "Log content:"
+        cat build.log || echo "No log file"
